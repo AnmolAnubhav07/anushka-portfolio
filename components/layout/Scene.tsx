@@ -31,7 +31,9 @@
  * hold already pins them, and two pinning mechanisms fight.
  */
 
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useRef, type ReactNode } from "react";
 import styles from "./Scene.module.css";
 
 export default function Scene({
@@ -55,9 +57,54 @@ export default function Scene({
    */
   keepOnMobile?: boolean;
 }) {
+  const holdRef = useRef<HTMLDivElement>(null);
+  const runwayRef = useRef<HTMLDivElement>(null);
+
+  /* MOBILE-ONLY RELEASE FIX. `.hold` (position: sticky) shares <main> as its
+     containing block with EVERY other scene, by design — on desktop that is
+     what lets a stack of sticky frames cover one another as later ones rise
+     (see the note in Scene.module.css). But on mobile only `keepOnMobile`
+     scenes stay sticky; their siblings drop to `position: static` and no
+     longer rise up to cover anything. Nothing then stops a `keepOnMobile`
+     hold's native sticky release, which is bounded by the *shared* <main>,
+     not by its own runway — so it stays glued to the top of the viewport,
+     painted over later static content by z-index, all the way to near the
+     bottom of the page. Once its own runway has scrolled fully past, force
+     it hidden by hand; restore it if the user scrolls back up. Desktop is
+     untouched: the class this toggles only does anything inside the mobile
+     media query in Scene.module.css. */
+  useEffect(() => {
+    if (!keepOnMobile) return;
+    const hold = holdRef.current;
+    const runwayEl = runwayRef.current;
+    if (!hold || !runwayEl) return;
+
+    const mq = window.matchMedia("(max-width: 1000px)");
+
+    const check = () => {
+      if (!mq.matches) {
+        hold.classList.remove(styles.pastMobile);
+        return;
+      }
+      const past = runwayEl.getBoundingClientRect().bottom <= 0;
+      hold.classList.toggle(styles.pastMobile, past);
+    };
+
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    mq.addEventListener("change", check);
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+      mq.removeEventListener("change", check);
+    };
+  }, [keepOnMobile]);
+
   return (
     <>
       <div
+        ref={holdRef}
         className={`${styles.hold} ${keepOnMobile ? styles.keepFrame : ""}`}
         data-scene={id ?? String(order)}
         style={{ zIndex: order }}
@@ -66,6 +113,7 @@ export default function Scene({
       </div>
       {runway > 0 && (
         <div
+          ref={runwayRef}
           className={`${styles.runway} ${keepOnMobile ? styles.keepRunway : ""}`}
           data-runway={id ?? String(order)}
           style={{ height: `calc(${runway} * 100svh)` }}

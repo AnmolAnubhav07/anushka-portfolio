@@ -69,6 +69,14 @@
   .keepRunway {
     display: block;
   }
+
+  /* A keepFrame hold's sticky containing block is the shared <main> (see
+     Scene.tsx), not its own runway, so it never naturally releases on its
+     own — Scene.tsx toggles this once the hold's runway has fully scrolled
+     past, so it stops painting over the static-flow content beneath it. */
+  .pastMobile {
+    visibility: hidden;
+  }
 }
 
 /* ============ REDUCED MOTION ============
